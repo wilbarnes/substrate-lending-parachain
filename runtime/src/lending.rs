@@ -21,7 +21,7 @@ use support::{
 use system::{ ensure_signed };
 use parity_codec::{ Encode, Decode };
 use runtime_primitives::traits::{ As, Hash, Zero };
-use runtime_primitives::Permill;
+use runtime_primitives::{ Permill, Perbill };
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait + balances::Trait {
@@ -35,7 +35,9 @@ pub trait Trait: system::Trait + balances::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as lending {
                 LiquidityProvider get(liquidity_provider) config(): T::AccountId;
-                UserBalance get(user_balance): map T::AccountId => (T::Balance, Permill);
+                UserBalance get(user_balance): map T::AccountId => (T::Balance, Perbill);
+                AccruedInterest get(accrued_interest): T::Balance;
+                InterestRate get(interest_rate): Perbill;
 
                 Nonce: u64;
 	}
@@ -54,7 +56,8 @@ decl_module! {
                     let liquidity_src = Self::liquidity_provider();
                     let nonce = <Nonce<T>>::get();
 
-                    let interest_rate = Permill::from_percent(7);
+                    let interest_rate = Perbill::from_percent(1);
+                    <InterestRate<T>>::put(interest_rate);
 
                     let user_data = (deposit_value, interest_rate);
 
@@ -65,6 +68,32 @@ decl_module! {
                         &liquidity_src,
                         deposit_value,
                     )?;
+
+                    Ok(())
+                }
+
+                fn compound_interest(_origin) -> Result {
+                    let sender = ensure_signed(_origin)?;
+
+                    let user_data = Self::user_balance(&sender);
+                    let mut user_bal = user_data.0;
+                    let user_int = user_data.1;
+
+                    // let burn = (user_int * user_bal).min(user_bal);
+
+                    let conv_bal = <T::Balance as As<u64>>::as_(user_bal);
+
+                    let accrual = Perbill::from_percent(1) * conv_bal;
+
+                    let upd_bal = conv_bal + &accrual;
+
+                    let rev_bal = <T::Balance as As<u64>>::sa(upd_bal);
+
+                    let new_user_data = (rev_bal, user_int);
+
+                    <UserBalance<T>>::insert(&sender, new_user_data);
+
+                    <AccruedInterest<T>>::put(&rev_bal);
 
                     Ok(())
                 }
