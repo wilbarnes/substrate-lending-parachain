@@ -9,19 +9,19 @@
 /// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
 
 use support::{ 
-    decl_module, decl_storage, decl_event, 
-    StorageValue, dispatch::Result, ensure,
-    traits::Currency
+    decl_module, 
+    decl_storage, 
+    decl_event, 
+    StorageValue,
+    StorageMap,
+    dispatch::Result, 
+    ensure,
+    traits::Currency, 
 };
 use system::{ ensure_signed };
 use parity_codec::{ Encode, Decode };
-
-#[derive(Encode, Decode, Default, Clone, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct LendingAccount<Hash, Balance> {
-    account_id: Hash,
-    balance: Balance,
-}
+use runtime_primitives::traits::{ As, Hash, Zero };
+use runtime_primitives::Permill;
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait + balances::Trait {
@@ -34,11 +34,10 @@ pub trait Trait: system::Trait + balances::Trait {
 /// This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as lending {
-		// Just a dummy storage item. 
-		// Here we are declaring a StorageValue, `Something` as a Option<u32>
-		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
                 LiquidityProvider get(liquidity_provider) config(): T::AccountId;
-		Something get(something): Option<u32>;
+                UserBalance get(user_balance): map T::AccountId => (T::Balance, Permill);
+
+                Nonce: u64;
 	}
 }
 
@@ -49,13 +48,27 @@ decl_module! {
 		// this is needed only if you are using events in your module
 		fn deposit_event<T>() = default;
 
-		// Just a dummy entry point.
-		// function that can be called by the external world as an extrinsics call
-		// takes a parameter of the type `AccountId`, stores it and emits an event
-                fn deposit_currency(_origin, deposit_value: T::Balance) -> Result {
+                fn deposit(_origin, deposit_value: T::Balance) -> Result {
                     let sender = ensure_signed(_origin)?;
+
+                    let liquidity_src = Self::liquidity_provider();
+                    let nonce = <Nonce<T>>::get();
+
+                    let interest_rate = Permill::from_percent(7);
+
+                    let user_data = (deposit_value, interest_rate);
+
+                    <UserBalance<T>>::insert(&sender, user_data);
+
+                    <balances::Module<T> as Currency<_>>::transfer(
+                        &sender,
+                        &liquidity_src,
+                        deposit_value,
+                    )?;
+
                     Ok(())
                 }
+
 	}
 }
 
