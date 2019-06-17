@@ -8,11 +8,23 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
 
-use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
-use system::ensure_signed;
+use support::{ 
+    decl_module, decl_storage, decl_event, 
+    StorageValue, dispatch::Result, ensure,
+    traits::Currency
+};
+use system::{ ensure_signed };
+use parity_codec::{ Encode, Decode };
+
+#[derive(Encode, Decode, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct LendingAccount<Hash, Balance> {
+    account_id: Hash,
+    balance: Balance,
+}
 
 /// The module's configuration trait.
-pub trait Trait: system::Trait {
+pub trait Trait: system::Trait + balances::Trait {
 	// TODO: Add other types and constants required configure this module.
 
 	/// The overarching event type.
@@ -40,18 +52,10 @@ decl_module! {
 		// Just a dummy entry point.
 		// function that can be called by the external world as an extrinsics call
 		// takes a parameter of the type `AccountId`, stores it and emits an event
-		pub fn do_something(origin, something: u32) -> Result {
-			// TODO: You only need this if you want to check it was signed.
-			let who = ensure_signed(origin)?;
-
-			// TODO: Code to execute when something calls this.
-			// For example: the following line stores the passed in u32 in the storage
-			<Something<T>>::put(something);
-
-			// here we are raising the Something event
-			Self::deposit_event(RawEvent::SomethingStored(something, who));
-			Ok(())
-		}
+                fn deposit_currency(_origin, deposit_value: T::Balance) -> Result {
+                    let sender = ensure_signed(_origin)?;
+                    Ok(())
+                }
 	}
 }
 

@@ -9,6 +9,10 @@ The runtime constructed here is a Proof-of-Concept, intended solely for instruct
 substrate-module-new lending wil
 ```
 
+### We make some initial changes in 'chain_spec.rs'
+Our chain specification is found here: 'src/chain_spec.rs' 
+
+To our dev chain, we add three additional accounts (Bob, Charlie, and Dave) that we will outfit with 1_000_000 units of currency. 
 
 # Building
 
