@@ -2,6 +2,7 @@ use primitives::{ed25519, sr25519, Pair};
 use lending_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig,
+        LendingConfig
 };
 use substrate_service;
 
@@ -46,7 +47,10 @@ impl Alternative {
 				|| testnet_genesis(vec![
 					authority_key("Alice")
 				], vec![
-					account_key("Alice")
+					account_key("Alice"),
+                                        account_key("Bob"),
+                                        account_key("Charlie"),
+                                        account_key("Dave"),
 				],
 					account_key("Alice")
 				),
@@ -109,11 +113,14 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
-			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
+			balances: endowed_accounts.iter().cloned().map(|k|(k, 1_000_000)).collect(),
 			vesting: vec![],
 		}),
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
+                lending: Some(LendingConfig {
+                    liquidity_provider: account_key("Alice"),
+                }),
 	}
 }

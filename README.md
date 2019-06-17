@@ -1,6 +1,14 @@
-# lending
+# lending proof of concept prototyping
 
-A new SRML-based Substrate node, ready for hacking.
+Found within this repo is an amalgamation of my experimentation with Substrate. 
+
+The runtime constructed here is a Proof-of-Concept, intended solely for instructional purposes at this time, though these are use-cases I will implement over time. 
+
+### Create the lending runtime module
+```
+substrate-module-new lending wil
+```
+
 
 # Building
 
