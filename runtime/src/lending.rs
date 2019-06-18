@@ -23,6 +23,16 @@ use parity_codec::{ Encode, Decode };
 use runtime_primitives::traits::{ As, Hash, Zero };
 use runtime_primitives::{ Permill, Perbill };
 
+#[derive(Encode, Decode, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Terms<Balance, BlockNumber> {
+    supplying: bool,
+    balance: Balance,
+    interest_rate: Perbill,
+    start_block: BlockNumber,
+    end_block: u64,
+}
+
 /// The module's configuration trait.
 pub trait Trait: system::Trait + balances::Trait {
 	// TODO: Add other types and constants required configure this module.
@@ -35,7 +45,8 @@ pub trait Trait: system::Trait + balances::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as lending {
                 LiquidityProvider get(liquidity_provider) config(): T::AccountId;
-                UserBalance get(user_balance): map T::AccountId => (T::Balance, Perbill);
+
+                UserBalance get(user_balance): map T::AccountId => Terms<T::Balance, T::BlockNumber>;
                 AccruedInterest get(accrued_interest): T::Balance;
                 InterestRate get(interest_rate): Perbill;
 
@@ -59,9 +70,17 @@ decl_module! {
                     let interest_rate = Perbill::from_percent(1);
                     <InterestRate<T>>::put(interest_rate);
 
-                    let user_data = (deposit_value, interest_rate);
+                    let current_block = <system::Module<T>>::block_number();
 
-                    <UserBalance<T>>::insert(&sender, user_data);
+                    let user_terms = Terms {
+                        supplying: true,
+                        balance: deposit_value,
+                        interest_rate: interest_rate,
+                        start_block: current_block,
+                        end_block: 0,
+                    };
+
+                    <UserBalance<T>>::insert(&sender, user_terms);
 
                     <balances::Module<T> as Currency<_>>::transfer(
                         &sender,
@@ -72,28 +91,111 @@ decl_module! {
                     Ok(())
                 }
 
+                fn withdraw(_origin) -> Result {
+                    let sender = ensure_signed(_origin)?;
+                    let liquidity_src = Self::liquidity_provider();
+
+                    // calculate interest rate based on start_block + end_block
+                    Self::calculate_and_render_interest();
+
+                    // retrieve user_data struct from storage
+                    let mut user_data = Self::user_balance(&sender);
+
+                    // store balance for transfer later
+                    let outgoing_balance = user_data.balance;
+
+                    // set user balance to zero
+                    user_data.balance = <T::Balance as As<u64>>::sa(0);
+
+                    // update struct in storage
+                    <UserBalance<T>>::insert(&sender, user_data);
+
+                    // transfer money from liquidity provider to sender
+                    <balances::Module<T> as Currency<_>>::transfer(
+                        &liquidity_src,
+                        &sender,
+                        outgoing_balance,
+                    )?;
+
+                    Ok(())
+                }
+
                 fn compound_interest(_origin) -> Result {
                     let sender = ensure_signed(_origin)?;
 
-                    let user_data = Self::user_balance(&sender);
-                    let mut user_bal = user_data.0;
-                    let user_int = user_data.1;
-
-                    // let burn = (user_int * user_bal).min(user_bal);
-
+                    let mut user_data = Self::user_balance(&sender);
+                    let user_bal = user_data.balance;
+                    let user_int = user_data.interest_rate;
                     let conv_bal = <T::Balance as As<u64>>::as_(user_bal);
 
                     let accrual = Perbill::from_percent(1) * conv_bal;
-
                     let upd_bal = conv_bal + &accrual;
-
                     let rev_bal = <T::Balance as As<u64>>::sa(upd_bal);
 
-                    let new_user_data = (rev_bal, user_int);
+                    user_data.balance = rev_bal;
+                    user_data.interest_rate = user_int;
 
-                    <UserBalance<T>>::insert(&sender, new_user_data);
-
+                    // update storage to reflect compounded interest
+                    <UserBalance<T>>::insert(&sender, user_data);
                     <AccruedInterest<T>>::put(&rev_bal);
+
+                    Ok(())
+                }
+
+                fn calculate_and_render_interest(_origin) -> Result {
+                    let sender = ensure_signed(_origin)?;
+                    let mut user_data = Self::user_balance(&sender);
+
+                    let end_block = <system::Module<T>>::block_number();
+                    let end_block_prim = <T::BlockNumber as As<u64>>::as_(end_block);
+
+                    // compound interest time period
+                    let type_to_convert = end_block - user_data.start_block;
+                    let compounding_periods = <T::Balance as As<u64>>::as_(type_to_convert);
+
+                    // grab substrate types
+                    let bal = user_data.balance;
+                    let int = user_data.interest_rate;
+
+                    // convert to rust primitive  
+                    let mut working_bal = <T::Balance as As<u64>>::as_(bal);
+
+                    // loop through the blocks and calculate compounding interest
+                    for _ in 0..compounding_periods {
+                        let compounded = int * working_bal;
+                        let working_bal = working_bal + compounded;
+                    }
+
+                    let updated_balance = <T::Balance as As<u64>>::sa(working_bal);
+                    user_data.balance = updated_balance;
+
+                    <UserBalance<T>>::insert(&sender, user_data);
+
+                    Ok(())
+                }
+
+                fn borrow(_origin, borrow_value: T::Balance) -> Result {
+                    let sender = ensure_signed(_origin)?;
+                    let liquidity_src = Self::liquidity_provider();
+
+                    let borrow_interest_rate = Perbill::from_percent(25);
+                    let current_block = <system::Module<T>>::block_number();
+
+                    let user_data = Terms {
+                        supplying: false,
+                        balance: borrow_value,
+                        interest_rate: borrow_interest_rate,
+                        start_block: current_block,
+                        end_block: 0,
+                    };
+
+                    <UserBalance<T>>::insert(&sender, user_data);
+
+                    <balances::Module<T> as Currency<_>>::transfer(
+                        &liquidity_src,
+                        &sender,
+                        borrow_value,
+                    )?;
 
                     Ok(())
                 }
