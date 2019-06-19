@@ -4,7 +4,6 @@
 /// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
 /// If you remove this file, you can remove those references
 
-
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
 
@@ -21,7 +20,7 @@ use support::{
 use system::{ ensure_signed };
 use parity_codec::{ Encode, Decode };
 use runtime_primitives::traits::{ As, Hash, Zero };
-use runtime_primitives::{ Permill, Perbill };
+use runtime_primitives::{ Perbill };
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -47,6 +46,12 @@ decl_storage! {
                 LiquidityProvider get(liquidity_provider) config(): T::AccountId;
 
                 UserBalance get(user_balance): map T::AccountId => Terms<T::Balance, T::BlockNumber>;
+
+                // rumtime special purposed array
+                UserArray get(user_array): map u64 => T::AccountId;
+                UserCount get(user_count): u64;
+                UserIndex: map T::AccountId => u64;
+
                 AccruedInterest get(accrued_interest): T::Balance;
                 InterestRate get(interest_rate): Perbill;
 
@@ -58,7 +63,6 @@ decl_module! {
 	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Initializing events
-		// this is needed only if you are using events in your module
 		fn deposit_event<T>() = default;
 
                 fn deposit(_origin, deposit_value: T::Balance) -> Result {
@@ -70,18 +74,21 @@ decl_module! {
                     let interest_rate = Perbill::from_percent(1);
                     <InterestRate<T>>::put(interest_rate);
 
-                    let current_block = <system::Module<T>>::block_number();
+                    // let current_block = <system::Module<T>>::block_number();
 
                     let user_terms = Terms {
                         supplying: true,
                         balance: deposit_value,
                         interest_rate: interest_rate,
-                        start_block: current_block,
+                        start_block: <system::Module<T>>::block_number(),
                         end_block: 0,
                     };
 
                     <UserBalance<T>>::insert(&sender, user_terms);
 
+                    Self::increment_array(sender.clone())?;
+
+                    // transfer currency to liquidity provider
                     <balances::Module<T> as Currency<_>>::transfer(
                         &sender,
                         &liquidity_src,
@@ -91,15 +98,13 @@ decl_module! {
                     Ok(())
                 }
 
-                fn withdraw(_origin) -> Result {
+                fn withdraw_in_full(_origin) -> Result {
                     let sender = ensure_signed(_origin)?;
                     let liquidity_src = Self::liquidity_provider();
 
-                    // calculate interest rate based on start_block + end_block
-                    Self::calculate_and_render_interest();
-
                     // retrieve user_data struct from storage
                     let mut user_data = Self::user_balance(&sender);
+                    ensure!(user_data.supplying == true, "User has no supplied currency");
 
                     // store balance for transfer later
                     let outgoing_balance = user_data.balance;
@@ -117,59 +122,8 @@ decl_module! {
                         outgoing_balance,
                     )?;
 
-                    Ok(())
-                }
-
-                fn compound_interest(_origin) -> Result {
-                    let sender = ensure_signed(_origin)?;
-
-                    let mut user_data = Self::user_balance(&sender);
-                    let user_bal = user_data.balance;
-                    let user_int = user_data.interest_rate;
-                    let conv_bal = <T::Balance as As<u64>>::as_(user_bal);
-
-                    let accrual = Perbill::from_percent(1) * conv_bal;
-                    let upd_bal = conv_bal + &accrual;
-                    let rev_bal = <T::Balance as As<u64>>::sa(upd_bal);
-
-                    user_data.balance = rev_bal;
-                    user_data.interest_rate = user_int;
-
-                    // update storage to reflect compounded interest
-                    <UserBalance<T>>::insert(&sender, user_data);
-                    <AccruedInterest<T>>::put(&rev_bal);
-
-                    Ok(())
-                }
-
-                fn calculate_and_render_interest(_origin) -> Result {
-                    let sender = ensure_signed(_origin)?;
-                    let mut user_data = Self::user_balance(&sender);
-
-                    let end_block = <system::Module<T>>::block_number();
-                    let end_block_prim = <T::BlockNumber as As<u64>>::as_(end_block);
-
-                    // compound interest time period
-                    let type_to_convert = end_block - user_data.start_block;
-                    let compounding_periods = <T::Balance as As<u64>>::as_(type_to_convert);
-
-                    // grab substrate types
-                    let bal = user_data.balance;
-                    let int = user_data.interest_rate;
-
-                    // convert to rust primitive  
-                    let mut working_bal = <T::Balance as As<u64>>::as_(bal);
-
-                    // loop through the blocks and calculate compounding interest
-                    for _ in 0..compounding_periods {
-                        let compounded = int * working_bal;
-                        let working_bal = working_bal + compounded;
-                    }
-
-                    let updated_balance = <T::Balance as As<u64>>::sa(working_bal);
-                    user_data.balance = updated_balance;
-
-                    <UserBalance<T>>::insert(&sender, user_data);
+                    // "helper" function decrement array, promoting code cleanliness
+                    Self::decrement_array(sender.clone())?;
 
                     Ok(())
                 }
@@ -178,6 +132,7 @@ decl_module! {
                     let sender = ensure_signed(_origin)?;
                     let liquidity_src = Self::liquidity_provider();
 
+                    // high interest rate for borrowers
                     let borrow_interest_rate = Perbill::from_percent(25);
                     let current_block = <system::Module<T>>::block_number();
 
@@ -189,7 +144,21 @@ decl_module! {
                         end_block: 0,
                     };
 
-                    <UserBalance<T>>::insert(&sender, user_data);
+                    <UserBalance<T>>::insert(&sender, &user_data);
+
+                    Self::increment_array(sender.clone())?;
+
+                    // // retrieve current user count for rumtime-purposed array
+                    // let user_count = Self::user_count();
+                    // // check for overflows
+                    // let new_user_count = user_count.checked_add(1)
+                    //     .ok_or("Overflow adding a new user to total users")?;
+
+                    // <UserBalance<T>>::insert(&sender, &user_data);
+
+                    // <UserArray<T>>::insert(user_count, &sender);
+                    // <UserCount<T>>::put(new_user_count);
+                    // <UserIndex<T>>::insert(&sender, user_count);
 
                     <balances::Module<T> as Currency<_>>::transfer(
                         &liquidity_src,
@@ -200,7 +169,169 @@ decl_module! {
                     Ok(())
                 }
 
+                fn repay_in_full(_origin) -> Result {
+                    let sender = ensure_signed(_origin)?;
+
+                    // retrieve user_data struct from storage
+                    let mut user_data = Self::user_balance(&sender);
+                    // check to ensure user has borrowed funds
+                    ensure!(user_data.supplying == false, "user has not borrowed funds");
+
+                    // store balance for transfer later
+                    let outgoing_balance = user_data.balance;
+
+                    // set user balance to zero
+                    user_data.balance = <T::Balance as As<u64>>::sa(0);
+
+                    Self::decrement_array(sender.clone())?;
+
+                    // perform transfer of funds
+                    Self::transfer_funds(
+                        sender.clone(), 
+                        Self::liquidity_provider(),
+                        outgoing_balance,
+                    )?;
+
+                    // update struct in storage to reflect paid in full
+                    <UserBalance<T>>::insert(&sender, user_data);
+
+                    Ok(())
+
+                }
+
+                fn on_finalize() {
+                    // retrieve user count to iterate over
+                    let user_count = Self::user_count();
+
+                    // iterate over open accounts, compounding interest
+                    for each in 0..user_count {
+                        let addr = Self::user_array(each);
+                        Self::compound_interest(addr);
+                    }
+                }
 	}
+}
+
+impl<T: Trait> Module<T> {
+    fn calculate_and_render_interest(to: T::AccountId) -> Result {
+        // TODO: add ensure statement here
+
+        let mut user_data = Self::user_balance(&to);
+
+        let end_block = <system::Module<T>>::block_number();
+        // let end_block_prim = <T::BlockNumber as As<u64>>::as_(end_block);
+
+        // compound interest time period
+        let type_to_convert = end_block - user_data.start_block;
+        let compounding_periods = <T::BlockNumber as As<u64>>::as_(type_to_convert);
+
+        // grab substrate types
+        let bal = user_data.balance;
+        let int = user_data.interest_rate;
+
+        // convert to rust primitive  
+        let mut working_bal = <T::Balance as As<u64>>::as_(bal);
+
+        // loop through the blocks and calculate compounding interest
+        for _ in 0..compounding_periods {
+            let compounded = int * working_bal;
+            working_bal += compounded;
+        }
+
+        let updated_balance = <T::Balance as As<u64>>::sa(working_bal);
+        user_data.balance = updated_balance;
+
+        <UserBalance<T>>::insert(&to, user_data);
+
+        Ok(())
+    }
+
+    fn compound_interest(account_to_compound: T::AccountId) -> Result {
+
+        let mut user_data = Self::user_balance(&account_to_compound);
+        let user_bal = user_data.balance;
+        let user_int = user_data.interest_rate;
+        let conv_bal = <T::Balance as As<u64>>::as_(user_bal);
+
+        let accrual = Perbill::from_percent(1) * conv_bal;
+        let upd_bal = conv_bal + &accrual;
+        let rev_bal = <T::Balance as As<u64>>::sa(upd_bal);
+
+        user_data.balance = rev_bal;
+        user_data.interest_rate = user_int;
+
+        // update storage to reflect compounded interest
+        <UserBalance<T>>::insert(&account_to_compound, user_data);
+        <AccruedInterest<T>>::put(&rev_bal);
+
+        Ok(())
+    }
+
+    fn transfer_funds(
+        outgoing: T::AccountId, 
+        incoming: T::AccountId,
+        transfer_value: T::Balance
+    ) -> Result {
+        <balances::Module<T> as Currency<_>>::transfer(
+            &outgoing,
+            &incoming,
+            transfer_value,
+        )?;
+
+        Ok(())
+    }
+
+    fn increment_array(user_to_add: T::AccountId) -> Result {
+        // retrieve current user count for rumtime-purposed array
+        let user_count = Self::user_count();
+        // check for overflows
+        let new_user_count = user_count.checked_add(1)
+            .ok_or("Overflow adding a new user to total users")?;
+
+        // <UserBalance<T>>::insert(&user_to_add, user_terms);
+
+        <UserArray<T>>::insert(user_count, &user_to_add);
+        <UserCount<T>>::put(new_user_count);
+        <UserIndex<T>>::insert(&user_to_add, user_count);
+
+        Ok(())
+    }
+
+    fn decrement_array(user_to_remove: T::AccountId) -> Result {
+        
+        let user_count = Self::user_count();
+        let new_user_count = user_count.checked_sub(1)
+            .ok_or("Underflow subtracting a new user from total users")?;
+
+        let user_index = <UserIndex<T>>::get(&user_to_remove);
+
+        // if sender is not the last item in the list
+        if user_index != user_count {
+            // set last_user as the last user in the list
+            let last_user = <UserArray<T>>::get(user_count);
+            // 
+            <UserArray<T>>::insert(&user_count, &last_user);
+            <UserIndex<T>>::insert(&last_user, user_index);
+        }
+        <UserArray<T>>::remove(&user_count);
+        <UserIndex<T>>::remove(&user_to_remove);
+        <UserCount<T>>::put(new_user_count);
+        <UserBalance<T>>::remove(user_to_remove);
+
+        // // retrieve current user count for rumtime-purposed array
+        // let user_count = Self::user_count();
+        // // check for overflows
+        // let new_user_count = user_count.checked_sub(1)
+        //     .ok_or("Underflow subtracting a new user to total users")?;
+
+        // <UserBalance<T>>::insert(&user_to_remove, user_terms);
+
+        // <UserArray<T>>::insert(user_count, &user_to_remove);
+        // <UserCount<T>>::put(new_user_count);
+        // <UserIndex<T>>::insert(&user_to_remove, user_count);
+        
+        Ok(())
+    }
 }
 
 decl_event!(
