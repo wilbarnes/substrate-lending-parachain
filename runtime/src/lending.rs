@@ -19,7 +19,7 @@ use support::{
 };
 use system::{ ensure_signed };
 use parity_codec::{ Encode, Decode };
-use runtime_primitives::traits::{ As, Hash, Zero };
+use runtime_primitives::traits::{ As };
 use runtime_primitives::{ Perbill };
 
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
@@ -51,6 +51,9 @@ decl_storage! {
                 UserArray get(user_array): map u64 => T::AccountId;
                 UserCount get(user_count): u64;
                 UserIndex: map T::AccountId => u64;
+
+                TotalSupply get(total_supply): u64;
+                TotalBorrow get(total_borrow): u64;
 
                 AccruedInterest get(accrued_interest): T::Balance;
                 InterestRate get(interest_rate): Perbill;
@@ -95,6 +98,9 @@ decl_module! {
                         deposit_value,
                     )?;
 
+                    // deposit 'CurrencySupplied' event
+                    Self::deposit_event(RawEvent::CurrencySupplied(sender, deposit_value));
+
                     Ok(())
                 }
 
@@ -125,14 +131,17 @@ decl_module! {
                     // "helper" function decrement array, promoting code cleanliness
                     Self::decrement_array(sender.clone())?;
 
+                    // deposit 'SupplyWithdrawn' event
+                    Self::deposit_event(RawEvent::SupplyWithdrawn(sender, outgoing_balance));
+
                     Ok(())
                 }
 
                 fn borrow(_origin, borrow_value: T::Balance) -> Result {
                     let sender = ensure_signed(_origin)?;
-                    let liquidity_src = Self::liquidity_provider();
+                    // let liquidity_src = Self::liquidity_provider();
 
-                    // high interest rate for borrowers
+                    // high interest rate for borrowers, hard-coded
                     let borrow_interest_rate = Perbill::from_percent(25);
                     let current_block = <system::Module<T>>::block_number();
 
@@ -144,27 +153,26 @@ decl_module! {
                         end_block: 0,
                     };
 
+                    // add struct to storage
                     <UserBalance<T>>::insert(&sender, &user_data);
 
+                    // increment chain specific array
                     Self::increment_array(sender.clone())?;
 
-                    // // retrieve current user count for rumtime-purposed array
-                    // let user_count = Self::user_count();
-                    // // check for overflows
-                    // let new_user_count = user_count.checked_add(1)
-                    //     .ok_or("Overflow adding a new user to total users")?;
-
-                    // <UserBalance<T>>::insert(&sender, &user_data);
-
-                    // <UserArray<T>>::insert(user_count, &sender);
-                    // <UserCount<T>>::put(new_user_count);
-                    // <UserIndex<T>>::insert(&sender, user_count);
-
-                    <balances::Module<T> as Currency<_>>::transfer(
-                        &liquidity_src,
-                        &sender,
+                    // perform transfer of funds
+                    Self::transfer_funds(
+                        Self::liquidity_provider(),
+                        sender.clone(),
                         borrow_value,
                     )?;
+
+                    // <balances::Module<T> as Currency<_>>::transfer(
+                    //     &liquidity_src,
+                    //     &sender,
+                    //     borrow_value,
+                    // )?;
+
+                    Self::deposit_event(RawEvent::CurrencyBorrowed(sender, borrow_value));
 
                     Ok(())
                 }
@@ -195,6 +203,8 @@ decl_module! {
                     // update struct in storage to reflect paid in full
                     <UserBalance<T>>::insert(&sender, user_data);
 
+                    Self::deposit_event(RawEvent::BorrowRepaid(sender, outgoing_balance));
+
                     Ok(())
 
                 }
@@ -203,9 +213,11 @@ decl_module! {
                     // retrieve user count to iterate over
                     let user_count = Self::user_count();
 
-                    // iterate over open accounts, compounding interest
+                    // iterate over open accounts
                     for each in 0..user_count {
+                        // retrieve address
                         let addr = Self::user_array(each);
+                        // compound interest of each account
                         Self::compound_interest(addr);
                     }
                 }
@@ -288,8 +300,6 @@ impl<T: Trait> Module<T> {
         let new_user_count = user_count.checked_add(1)
             .ok_or("Overflow adding a new user to total users")?;
 
-        // <UserBalance<T>>::insert(&user_to_add, user_terms);
-
         <UserArray<T>>::insert(user_count, &user_to_add);
         <UserCount<T>>::put(new_user_count);
         <UserIndex<T>>::insert(&user_to_add, user_count);
@@ -318,28 +328,21 @@ impl<T: Trait> Module<T> {
         <UserCount<T>>::put(new_user_count);
         <UserBalance<T>>::remove(user_to_remove);
 
-        // // retrieve current user count for rumtime-purposed array
-        // let user_count = Self::user_count();
-        // // check for overflows
-        // let new_user_count = user_count.checked_sub(1)
-        //     .ok_or("Underflow subtracting a new user to total users")?;
-
-        // <UserBalance<T>>::insert(&user_to_remove, user_terms);
-
-        // <UserArray<T>>::insert(user_count, &user_to_remove);
-        // <UserCount<T>>::put(new_user_count);
-        // <UserIndex<T>>::insert(&user_to_remove, user_count);
-        
         Ok(())
     }
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		// Just a dummy event.
-		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
-		// To emit this event, we call the deposit funtion, from our runtime funtions
-		SomethingStored(u32, AccountId),
+	pub enum Event<T> 
+        where 
+            // AccountId = <T as system::Trait>::AccountId 
+            <T as system::Trait>::AccountId,
+            <T as balances::Trait>::Balance,
+        {
+                CurrencySupplied(AccountId, Balance),
+                CurrencyBorrowed(AccountId, Balance),
+                SupplyWithdrawn(AccountId, Balance),
+                BorrowRepaid(AccountId, Balance),
 	}
 );
 
