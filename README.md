@@ -1,6 +1,6 @@
 # Lending Runtime Proof of Concept
 
-Open finance is a concept that strongly resonates with me. Additionally, have the liberty to write code so close tto the machinery of a chain is something worth exploring. 
+Open finance is a concept that strongly resonates with me. Additionally, having the liberty to write code so close to the machinery of a chain is something worth exploring. 
 
 ## The Runtime
 
