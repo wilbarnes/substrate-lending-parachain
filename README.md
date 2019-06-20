@@ -1,8 +1,116 @@
-# lending proof of concept prototyping
+# Lending Runtime Proof of Concept
 
-Found within this repo is an amalgamation of my experimentation with Substrate. 
+Open finance is a concept that strongly resonates with me. Additionally, have the liberty to write code so close tto the machinery of a chain is something worth exploring. 
+
+## The Runtime
+
+The logic is simple, and for the sake of brevity, much of the logic has been generalized. This proof-of-concept was build with speed with the goal of iterating on it over time. It is not production ready. 
+
+The liquidity provider used is Alice, and this variable is set using the GenesisConfig with the variable being retrieved from the 'src/chain_spec.rs' file. 
+
+Within the 'src/chain_spec.rs' file:
+```
+impl Alternative {
+	/// Get an actual chain config from one of the alternatives.
+	pub(crate) fn load(self) -> Result<ChainSpec, String> {
+		Ok(match self {
+			Alternative::Development => ChainSpec::from_genesis(
+				"Development",
+				"dev",
+				|| testnet_genesis(vec![
+					authority_key("Alice")
+				], vec![
+					account_key("Alice"),
+                                        account_key("Bob"),
+                                        account_key("Charlie"),
+                                        account_key("Dave"),
+				],
+					account_key("Alice")
+				),
+				vec![],
+				None,
+				None,
+				None,
+				None
+			),
+			Alternative::LocalTestnet => ChainSpec::from_genesis(
+				"Local Testnet",
+				"local_testnet",
+				|| testnet_genesis(vec![
+					authority_key("Alice"),
+					authority_key("Bob"),
+				], vec![
+					account_key("Alice"), // adding additional accounts 
+					account_key("Bob"),   // that we'll later outfit with currency
+					account_key("Charlie"),
+					account_key("Dave"),
+					account_key("Eve"),
+					account_key("Ferdie"),
+				],
+					account_key("Alice"),
+				),
+				vec![],
+				None,
+				None,
+				None,
+				None
+			),
+		})
+	}
+
+```
+
+```
+fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
+	GenesisConfig {
+		consensus: Some(ConsensusConfig {
+			code: include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/lending_runtime_wasm.compact.wasm").to_vec(),
+			authorities: initial_authorities.clone(),
+		}),
+		system: None,
+		timestamp: Some(TimestampConfig {
+			minimum_period: 5, // 10 second block time.
+		}),
+		indices: Some(IndicesConfig {
+			ids: endowed_accounts.clone(),
+		}),
+		balances: Some(BalancesConfig {
+			transaction_base_fee: 1,
+			transaction_byte_fee: 0,
+			existential_deposit: 500,
+			transfer_fee: 0,
+			creation_fee: 0,
+			balances: endowed_accounts.iter().cloned().map(|k|(k, 1_000_000)).collect(),
+			vesting: vec![],
+		}),
+		sudo: Some(SudoConfig {
+			key: root_key,
+		}),
+                lending: Some(LendingConfig {
+                    liquidity_provider: account_key("Alice"),
+                }),
+	}
+}
+```
+
+Methods:
+```
+// supplying currency to the runtime
+fn deposit(_origin, deposit_value: T::Balance) -> Result {};
+fn withdraw_in_full(_origin) -> Result {};
+
+// borrowing currency from the runtime
+fn borrow(_origin, borrow_value: T::Balance) -> Result {};
+fn repay_in_full(_origin) -> Result ();
+
+fn on_finalize() {};
+```
+
+
 
 The runtime constructed here is a Proof-of-Concept, intended solely for instructional purposes at this time, though these are use-cases I will implement over time. 
+
+
 
 ### Create the lending runtime module
 ```

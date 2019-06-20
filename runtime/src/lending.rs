@@ -17,7 +17,7 @@ use support::{
     ensure,
     traits::Currency, 
 };
-use system::{ ensure_signed };
+use system::{ ensure_signed, ensure_root };
 use parity_codec::{ Encode, Decode };
 use runtime_primitives::traits::{ As };
 use runtime_primitives::{ Perbill };
@@ -42,7 +42,7 @@ pub trait Trait: system::Trait + balances::Trait {
 
 /// This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait> as lending {
+	trait Store for Module<T: Trait> as Lending {
                 LiquidityProvider get(liquidity_provider) config(): T::AccountId;
 
                 UserBalance get(user_balance): map T::AccountId => Terms<T::Balance, T::BlockNumber>;
@@ -68,6 +68,15 @@ decl_module! {
 		// Initializing events
 		fn deposit_event<T>() = default;
 
+                // fn set_provider(_origin, new_provider: T::AccountId) -> Result {
+                //     let sender = ensure_root(_origin)?;
+                //     let old_provider = Self::liquidity_provider();
+
+                //     <LiquidityProvider<T>>::put(new_provider);
+
+                //     Ok(())
+                // }
+
                 fn deposit(_origin, deposit_value: T::Balance) -> Result {
                     let sender = ensure_signed(_origin)?;
 
@@ -76,8 +85,6 @@ decl_module! {
 
                     let interest_rate = Perbill::from_percent(1);
                     <InterestRate<T>>::put(interest_rate);
-
-                    // let current_block = <system::Module<T>>::block_number();
 
                     let user_terms = Terms {
                         supplying: true,
@@ -165,12 +172,6 @@ decl_module! {
                         sender.clone(),
                         borrow_value,
                     )?;
-
-                    // <balances::Module<T> as Currency<_>>::transfer(
-                    //     &liquidity_src,
-                    //     &sender,
-                    //     borrow_value,
-                    // )?;
 
                     Self::deposit_event(RawEvent::CurrencyBorrowed(sender, borrow_value));
 
@@ -339,6 +340,7 @@ decl_event!(
             <T as system::Trait>::AccountId,
             <T as balances::Trait>::Balance,
         {
+                LiquidityProvidedChanged(AccountId, AccountId),
                 CurrencySupplied(AccountId, Balance),
                 CurrencyBorrowed(AccountId, Balance),
                 SupplyWithdrawn(AccountId, Balance),
@@ -353,7 +355,11 @@ mod tests {
 
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
-	use support::{impl_outer_origin, assert_ok};
+	use support::{ 
+            impl_outer_origin, 
+            assert_ok, 
+            assert_noop 
+        };
 	use runtime_primitives::{
 		BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup},
@@ -364,11 +370,9 @@ mod tests {
 		pub enum Origin for Test {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
+
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -382,25 +386,137 @@ mod tests {
 		type Event = ();
 		type Log = DigestItem;
 	}
-	impl Trait for Test {
-		type Event = ();
-	}
-	type lending = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+	impl super::Trait for Test {
+		type Event = ();
+        }
+
+        impl balances::Trait for Test {
+                type Balance = u128;
+                type OnFreeBalanceZero = ();
+                type OnNewAccount = ();
+                type Event = ();
+
+                type TransactionPayment = ();
+                type DustRemoval = ();
+                type TransferPayment = ();
 	}
+
+	type Lending = Module<Test>;
+
+	fn build() -> runtime_io::TestExternalities<Blake2Hasher> {
+		let mut t = system::GenesisConfig::<Test>::default()
+                    .build_storage()
+                    .unwrap()
+                    .0;
+                t.extend(balances::GenesisConfig::<Test> {
+                    transaction_base_fee: 0,
+                    transaction_byte_fee: 0,
+                    existential_deposit: 0,
+                    transfer_fee: 0,
+                    creation_fee: 0,
+                    balances: vec![
+                        (1, 1_000_000), // Alice in 'chain_spec.rs' (figuratively)
+                        (2, 1_000_000), // Bob ''
+                        (3, 1_000_000), // Charlie ''
+                        (4, 1_000_000)], // Dave ''
+                    vesting: vec![],
+                    }
+                    .build_storage()
+                    .unwrap()
+                    .0,
+                    );
+
+                t.extend(
+                    GenesisConfig::<Test> {
+                        liquidity_provider: 1,
+                    }
+                    .build_storage()
+                    .unwrap()
+                    .0,
+                );
+                t.into()
+	}
+
+        #[test]
+        fn kicking_the_tires() {
+            with_externalities(&mut build(), || {
+                assert!(true);
+            })
+        }
 
 	#[test]
-	fn it_works_for_default_value() {
-		with_externalities(&mut new_test_ext(), || {
-			// Just a dummy test for the dummy funtion `do_something`
-			// calling the `do_something` function with a value 42
-			assert_ok!(lending::do_something(Origin::signed(1), 42));
-			// asserting that the stored value is equal to what we stored
-			assert_eq!(lending::something(), Some(42));
-		});
+	fn user_can_make_a_deposit() {
+            with_externalities(&mut build(), || { 
+                assert_ok!(Lending::deposit(Origin::signed(2), 100));
+                assert_ok!(Lending::deposit(Origin::signed(3), 100));
+            });
 	}
+
+        #[test]
+        fn user_can_make_a_withdraw() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::deposit(Origin::signed(2), 100));
+                assert_ok!(Lending::withdraw_in_full(Origin::signed(2)));
+            });
+        }
+
+        #[test]
+        fn user_cant_withraw_without_deposit() {
+            with_externalities(&mut build(), || {
+                assert_noop!(Lending::withdraw_in_full(Origin::signed(2)), 
+                             "User has no supplied currency");
+            });
+        }
+
+        #[test]
+        fn check_liquidity_provider() {
+            with_externalities(&mut build(), || {
+                assert_eq!(Lending::liquidity_provider(), 1);
+            });
+        }
+
+        #[test]
+        fn user_can_borrow() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::borrow(Origin::signed(2), 100));
+            });
+        }
+
+        #[test]
+        fn user_count_increments_when_supplying() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::deposit(Origin::signed(2), 100));
+                assert_eq!(Lending::user_count(), 1);
+            });
+        }
+
+        #[test]
+        fn user_count_decrements_when_withdrawing() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::deposit(Origin::signed(2), 100));
+                assert_eq!(Lending::user_count(), 1);
+                assert_ok!(Lending::withdraw_in_full(Origin::signed(2)));
+                assert_eq!(Lending::user_count(), 0);
+            });
+        }
+
+        #[test]
+        fn user_count_increments_when_borrowing() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::borrow(Origin::signed(2), 100));
+                assert_eq!(Lending::user_count(), 1);
+            });
+        }
+
+        #[test]
+        fn user_count_decrements_when_repaid() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::borrow(Origin::signed(2), 100));
+                assert_eq!(Lending::user_count(), 1);
+                assert_ok!(Lending::repay_in_full(Origin::signed(2)));
+                assert_eq!(Lending::user_count(), 0);
+            });
+        }
+
 }
