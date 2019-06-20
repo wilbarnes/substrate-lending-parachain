@@ -29,7 +29,6 @@ pub struct Terms<Balance, BlockNumber> {
     balance: Balance,
     interest_rate: Perbill,
     start_block: BlockNumber,
-    end_block: u64,
 }
 
 /// The module's configuration trait.
@@ -68,15 +67,6 @@ decl_module! {
 		// Initializing events
 		fn deposit_event<T>() = default;
 
-                // fn set_provider(_origin, new_provider: T::AccountId) -> Result {
-                //     let sender = ensure_root(_origin)?;
-                //     let old_provider = Self::liquidity_provider();
-
-                //     <LiquidityProvider<T>>::put(new_provider);
-
-                //     Ok(())
-                // }
-
                 fn deposit(_origin, deposit_value: T::Balance) -> Result {
                     let sender = ensure_signed(_origin)?;
 
@@ -91,7 +81,6 @@ decl_module! {
                         balance: deposit_value,
                         interest_rate: interest_rate,
                         start_block: <system::Module<T>>::block_number(),
-                        end_block: 0,
                     };
 
                     <UserBalance<T>>::insert(&sender, user_terms);
@@ -146,7 +135,6 @@ decl_module! {
 
                 fn borrow(_origin, borrow_value: T::Balance) -> Result {
                     let sender = ensure_signed(_origin)?;
-                    // let liquidity_src = Self::liquidity_provider();
 
                     // high interest rate for borrowers, hard-coded
                     let borrow_interest_rate = Perbill::from_percent(25);
@@ -157,7 +145,6 @@ decl_module! {
                         balance: borrow_value,
                         interest_rate: borrow_interest_rate,
                         start_block: current_block,
-                        end_block: 0,
                     };
 
                     // add struct to storage
@@ -226,39 +213,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-    fn calculate_and_render_interest(to: T::AccountId) -> Result {
-        // TODO: add ensure statement here
-
-        let mut user_data = Self::user_balance(&to);
-
-        let end_block = <system::Module<T>>::block_number();
-        // let end_block_prim = <T::BlockNumber as As<u64>>::as_(end_block);
-
-        // compound interest time period
-        let type_to_convert = end_block - user_data.start_block;
-        let compounding_periods = <T::BlockNumber as As<u64>>::as_(type_to_convert);
-
-        // grab substrate types
-        let bal = user_data.balance;
-        let int = user_data.interest_rate;
-
-        // convert to rust primitive  
-        let mut working_bal = <T::Balance as As<u64>>::as_(bal);
-
-        // loop through the blocks and calculate compounding interest
-        for _ in 0..compounding_periods {
-            let compounded = int * working_bal;
-            working_bal += compounded;
-        }
-
-        let updated_balance = <T::Balance as As<u64>>::sa(working_bal);
-        user_data.balance = updated_balance;
-
-        <UserBalance<T>>::insert(&to, user_data);
-
-        Ok(())
-    }
-
     fn compound_interest(account_to_compound: T::AccountId) -> Result {
 
         let mut user_data = Self::user_balance(&account_to_compound);
