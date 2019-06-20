@@ -14,25 +14,7 @@ impl Alternative {
 	/// Get an actual chain config from one of the alternatives.
 	pub(crate) fn load(self) -> Result<ChainSpec, String> {
 		Ok(match self {
-			Alternative::Development => ChainSpec::from_genesis(
-				"Development",
-				"dev",
-				|| testnet_genesis(vec![
-					authority_key("Alice")
-				], vec![
-					account_key("Alice"),
-                                        account_key("Bob"),
-                                        account_key("Charlie"),
-                                        account_key("Dave"),
-				],
-					account_key("Alice")
-				),
-				vec![],
-				None,
-				None,
-				None,
-				None
-			),
+			[..cut..]
 			Alternative::LocalTestnet => ChainSpec::from_genesis(
 				"Local Testnet",
 				"local_testnet",
@@ -50,10 +32,7 @@ impl Alternative {
 					account_key("Alice"),
 				),
 				vec![],
-				None,
-				None,
-				None,
-				None
+				[..cut..]
 			),
 		})
 	}
@@ -105,6 +84,22 @@ fn repay_in_full(_origin) -> Result ();
 
 fn on_finalize() {};
 ```
+
+- Users supplying currency to Alice compound interest at 1% per block. That's quite a nice rate to compound on a per block basis. 
+- Users borrowing currency from Alice compound interest at 25% per block. Quite an expensive loan. 
+- If Alice garners some borrowers she'll be earning good cash. However, her intention is to act as a market maker and she's saved an initial 1,000,000 units of currency to bootstrap her market making operation, so she's looking for folks to supply some additional cash. This is how she'll scale and earn more currency. 
+
+Supplying and Earning Interest 
+- Using the 'deposit()' method, any user can supply currency and start collecting interest from Alice, our liquidity provider. 
+- Using the 'withdraw_in_full()' method, any user with a deposit can exit the market collecting their initial stake and any accrued interest. 
+
+Borrowing and Repaying Interest
+- Using the 'borrow()' method, any user can borrow currency and start having the interest they'll eventually pay back start compounding. It's an expensive loan, 25%, so don't borrow and forget!
+- Using the 'repay_in_full()' method, any user who's borrowed currency can repay it back in addition to any interest they owe. 
+
+NOTE: Currently, this is an unsecured loan. Let's make the assumption that Alice knows or has vetted the folks she's allowing to borrow from her. 
+DEV TODO: Implement logic for secured lending (akin to MakerDAO & Compound).
+
 
 
 
