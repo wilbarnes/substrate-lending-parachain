@@ -8,6 +8,8 @@ The runtime logic is simple, and for the sake of brevity, much of it has been ge
 
 In its current state, the runtime is light, only inheriting the balances module and the currency trait. Functionality is limited in the sense that one T::AccountId maps to one loan/deposit. 
 
+*TODO*: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
+
 A user cannot:
 - supply currency and then in another transaction supply more
 - supply currency and then borrow currency, and vice versa
