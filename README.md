@@ -89,17 +89,32 @@ I couldn't get some of the associated methods of this trait to return what I nee
 Building webassembly binary in runtime/wasm...
    Compiling lending-runtime v1.0.0 (/home/wil/Documents/projects/rust/substrate/lending/runtime)
 error[E0599]: no function or associated item named `from_faction` found for type `lending::sr_api_hidden_includes_decl_storage::hidden_include::sr_primitives::Permill` in the current scope
-  --> /home/wil/Documents/projects/rust/substrate/lending/runtime/src/lending.rs:67:49
+  --> /home/wil/Documents/projects/rust/substrate/lending/runtime/src/lending.rs:67:58
    |
-67 |                     let test_permill = Permill::from_faction(0.25);
-   |                                                 ^^^^^^^^^^^^ function or associated item not found in `lending::sr_api_hidden_includes_decl_storage::hidden_include::sr_primitives::Permill`
+67 |                     let test_permill_fraction = Permill::from_faction(0.25);
+   |                                                          ^^^^^^^^^^^^ function or associated item not found in `lending::sr_api_hidden_includes_decl_storage::hidden_include::sr_primitives::Permill`
 
-error: aborting due to previous error
+error[E0599]: no function or associated item named `zero` found for type `lending::sr_api_hidden_includes_decl_storage::hidden_include::sr_primitives::Permill` in the current scope
+  --> /home/wil/Documents/projects/rust/substrate/lending/runtime/src/lending.rs:68:54
+   |
+68 |                     let test_permill_zero = Permill::zero();
+   |                                                      ^^^^ function or associated item not found in `lending::sr_api_hidden_includes_decl_storage::hidden_include::sr_primitives::Permill`
+
+error: aborting due to 2 previous errors
 
 For more information about this error, try `rustc --explain E0599`.
 error: Could not compile `lending-runtime`.
-```
 
+```
+This is a reminder to myself to investigate this further. I discovered that `runtime_primitives::Perbill` offered what I needed, so I went forward with that in the interest of creating a working concept. 
+
+### Compounding Interest
+
+The current process to compound interest occurs in step-by-step fashion, straying away from 'complex' arithmetic. 
+
+My goal is to implement an Interest Rate Index which allows the accrued interest of an account to be calculated off-chain. Currently, the 
+
+- 
 
 # Building
 
