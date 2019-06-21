@@ -53,7 +53,6 @@ DEV TODO: Implement logic for secured lending (akin to MakerDAO & Compound).
 The runtime constructed here is a Proof-of-Concept, intended solely for instructional purposes at this time, though these are use-cases I will implement over time. 
 
 
-
 ### Create the lending runtime module
 ```
 substrate-module-new lending wil
@@ -63,6 +62,44 @@ substrate-module-new lending wil
 Our chain specification is found here: 'src/chain_spec.rs' 
 
 To our dev chain, we add three additional accounts (Bob, Charlie, and Dave) that we will outfit with 1_000_000 units of currency. 
+
+# Architecture Decisions 
+
+## Chain Spec
+
+The 'src/chain_spec.rs' file was amended to initialize balances to Alice, Bob, Dave, and Charlie. Each receive an initial balance of 1,000,000 units of currency. This was chosen arbitrarily. Additionally, Alice is set as the initial liquidity provider. 
+
+These Genesis Config values are set using 'config()' when declaring the storage variable in the 'decl_storage!' macro:
+
+`LiquidityProvider get(liquidity_provider) config()`
+
+Note the 'get()' function, this sets the storage variable as a public getter function that can be retrieved from the global chain state. 
+
+## Interest Rate Mechanisms
+
+Working with this was quite difficult. Not much documentation existed beyond the reference docs, so I spent some time iterating and documenting my experience using these types below. 
+
+### Attempting to Implement Permill
+
+`use runtime_primitives::Permill`
+
+I couldn't get some of the associated methods of this trait to return what I needed, and perhaps that was my user error. See compiler error below:
+
+```
+Building webassembly binary in runtime/wasm...
+   Compiling lending-runtime v1.0.0 (/home/wil/Documents/projects/rust/substrate/lending/runtime)
+error[E0599]: no function or associated item named `from_faction` found for type `lending::sr_api_hidden_includes_decl_storage::hidden_include::sr_primitives::Permill` in the current scope
+  --> /home/wil/Documents/projects/rust/substrate/lending/runtime/src/lending.rs:67:49
+   |
+67 |                     let test_permill = Permill::from_faction(0.25);
+   |                                                 ^^^^^^^^^^^^ function or associated item not found in `lending::sr_api_hidden_includes_decl_storage::hidden_include::sr_primitives::Permill`
+
+error: aborting due to previous error
+
+For more information about this error, try `rustc --explain E0599`.
+error: Could not compile `lending-runtime`.
+```
+
 
 # Building
 
