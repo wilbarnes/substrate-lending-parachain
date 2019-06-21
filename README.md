@@ -1,4 +1,4 @@
-# Lending Runtime Proof of Concept
+# Substrate Lending Runtime Proof of Concept
 
 Open finance is a concept that strongly resonates with me. Additionally, having the liberty to write code so close to the machinery of a chain is a powerful feature. 
 
