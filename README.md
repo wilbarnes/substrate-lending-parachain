@@ -1,76 +1,20 @@
 # Lending Runtime Proof of Concept
 
-Open finance is a concept that strongly resonates with me. Additionally, having the liberty to write code so close to the machinery of a chain is something worth exploring. 
+Open finance is a concept that strongly resonates with me. Additionally, having the liberty to write code so close to the machinery of a chain is a powerful feature. 
 
 ## The Runtime
 
-The logic is simple, and for the sake of brevity, much of the logic has been generalized. This proof-of-concept was build with speed with the goal of iterating on it over time. It is not production ready. 
+The runtime logic is simple, and for the sake of brevity, much of it has been generalized. This proof-of-concept was built with speed. It is not production ready. 
+
+In its current state, the runtime is light, only inheriting the balances module and the currency trait. Functionality is limited in the sense that one T::AccountId maps to one loan/deposit. 
+
+A user cannot:
+- supply currency and then in another transaction supply more
+- supply currency and then borrow currency, and vice versa
+
+In each of these scenarios, the extrinsic will fail. The deposit and borrow functions both contain 'ensure!()' macros that prevent users from performing any action if they have an existing action in the runtime. 
 
 The liquidity provider used is Alice, and this variable is set using the GenesisConfig with the variable being retrieved from the 'src/chain_spec.rs' file. 
-
-Within the 'src/chain_spec.rs' file:
-```
-impl Alternative {
-	/// Get an actual chain config from one of the alternatives.
-	pub(crate) fn load(self) -> Result<ChainSpec, String> {
-		Ok(match self {
-			[..cut..]
-			Alternative::LocalTestnet => ChainSpec::from_genesis(
-				"Local Testnet",
-				"local_testnet",
-				|| testnet_genesis(vec![
-					authority_key("Alice"),
-					authority_key("Bob"),
-				], vec![
-					account_key("Alice"), // adding additional accounts 
-					account_key("Bob"),   // that we'll later outfit with currency
-					account_key("Charlie"),
-					account_key("Dave"),
-					account_key("Eve"),
-					account_key("Ferdie"),
-				],
-					account_key("Alice"),
-				),
-				vec![],
-				[..cut..]
-			),
-		})
-	}
-
-```
-
-```
-fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
-	GenesisConfig {
-		consensus: Some(ConsensusConfig {
-			code: include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/lending_runtime_wasm.compact.wasm").to_vec(),
-			authorities: initial_authorities.clone(),
-		}),
-		system: None,
-		timestamp: Some(TimestampConfig {
-			minimum_period: 5, // 10 second block time.
-		}),
-		indices: Some(IndicesConfig {
-			ids: endowed_accounts.clone(),
-		}),
-		balances: Some(BalancesConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
-			existential_deposit: 500,
-			transfer_fee: 0,
-			creation_fee: 0,
-			balances: endowed_accounts.iter().cloned().map(|k|(k, 1_000_000)).collect(),
-			vesting: vec![],
-		}),
-		sudo: Some(SudoConfig {
-			key: root_key,
-		}),
-                lending: Some(LendingConfig {
-                    liquidity_provider: account_key("Alice"),
-                }),
-	}
-}
-```
 
 Methods:
 ```
@@ -84,20 +28,21 @@ fn repay_in_full(_origin) -> Result ();
 
 fn on_finalize() {};
 ```
-
+## Overview 
 - Users supplying currency to Alice compound interest at 1% per block. That's quite a nice rate to compound on a per block basis. 
 - Users borrowing currency from Alice compound interest at 25% per block. Quite an expensive loan. 
 - If Alice garners some borrowers she'll be earning good cash. However, her intention is to act as a market maker and she's saved an initial 1,000,000 units of currency to bootstrap her market making operation, so she's looking for folks to supply some additional cash. This is how she'll scale and earn more currency. 
 
-Supplying and Earning Interest 
+### Supplying and Earning Interest 
 - Using the 'deposit()' method, any user can supply currency and start collecting interest from Alice, our liquidity provider. 
 - Using the 'withdraw_in_full()' method, any user with a deposit can exit the market collecting their initial stake and any accrued interest. 
 
-Borrowing and Repaying Interest
+### Borrowing and Repaying Interest
 - Using the 'borrow()' method, any user can borrow currency and start having the interest they'll eventually pay back start compounding. It's an expensive loan, 25%, so don't borrow and forget!
 - Using the 'repay_in_full()' method, any user who's borrowed currency can repay it back in addition to any interest they owe. 
 
 NOTE: Currently, this is an unsecured loan. Let's make the assumption that Alice knows or has vetted the folks she's allowing to borrow from her. 
+
 DEV TODO: Implement logic for secured lending (akin to MakerDAO & Compound).
 
 
