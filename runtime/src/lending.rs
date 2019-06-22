@@ -1,12 +1,3 @@
-/// A runtime module template with necessary imports
-
-/// Feel free to remove or edit this file as needed.
-/// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
-/// If you remove this file, you can remove those references
-
-/// For more guidance on Substrate modules, see the example module
-/// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
-
 use support::{ 
     decl_module, 
     decl_storage, 
@@ -17,7 +8,7 @@ use support::{
     ensure,
     traits::Currency, 
 };
-use system::{ ensure_signed, ensure_root };
+use system::{ ensure_signed };
 use parity_codec::{ Encode, Decode };
 use runtime_primitives::traits::{ As };
 use runtime_primitives::{ Perbill };
@@ -31,38 +22,33 @@ pub struct Terms<Balance, BlockNumber> {
     start_block: BlockNumber,
 }
 
-/// The module's configuration trait.
 pub trait Trait: system::Trait + balances::Trait {
-	// TODO: Add other types and constants required configure this module.
-
-	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-/// This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as Lending {
+                // liquidity provider set in genesis config
                 LiquidityProvider get(liquidity_provider) config(): T::AccountId;
 
+                // Total Supply & Borrow
+                TotalSupply get(total_supply): u64;
+                TotalBorrow get(total_borrow): u64;
+
+                // Utilization Ratio = Borrows[a] / (Cash[a] + Borrows[a])
+                UtilRatio get(util_ratio): Perbill;
+
+                // mapping of AccountId to Terms struct
                 UserBalance get(user_balance): map T::AccountId => Terms<T::Balance, T::BlockNumber>;
 
                 // rumtime special purposed array
                 UserArray get(user_array): map u64 => T::AccountId;
                 UserCount get(user_count): u64;
                 UserIndex: map T::AccountId => u64;
-
-                TotalSupply get(total_supply): u64;
-                TotalBorrow get(total_borrow): u64;
-
-                AccruedInterest get(accrued_interest): T::Balance;
-                InterestRate get(interest_rate): Perbill;
-
-                Nonce: u64;
 	}
 }
 
 decl_module! {
-	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Initializing events
 		fn deposit_event<T>() = default;
@@ -70,12 +56,14 @@ decl_module! {
                 fn deposit(_origin, deposit_value: T::Balance) -> Result {
                     let sender = ensure_signed(_origin)?;
 
-                    let liquidity_src = Self::liquidity_provider();
-                    let nonce = <Nonce<T>>::get();
+                    // user cannot deposit more to account, can only withdraw
+                    ensure!(!<UserBalance<T>>::exists(&sender), 
+                            "User has an existing deposit.");
 
+                    // interest rate hard-coded at 1 percent
                     let interest_rate = Perbill::from_percent(1);
-                    <InterestRate<T>>::put(interest_rate);
 
+                    // set user supply terms
                     let user_terms = Terms {
                         supplying: true,
                         balance: deposit_value,
@@ -83,14 +71,23 @@ decl_module! {
                         start_block: <system::Module<T>>::block_number(),
                     };
 
+                    let incr_total_supply = Self::total_supply()
+                        .checked_add(<T::Balance as As<u64>>::as_(deposit_value))
+                        .ok_or("Overflow encourtered incrementing total supply")?;
+
+                    // update TotalSupply to new value
+                    <TotalSupply<T>>::put(incr_total_supply);
+
+                    // insert user supply terms to storage
                     <UserBalance<T>>::insert(&sender, user_terms);
 
+                    // increment chain specific array
                     Self::increment_array(sender.clone())?;
 
                     // transfer currency to liquidity provider
-                    <balances::Module<T> as Currency<_>>::transfer(
-                        &sender,
-                        &liquidity_src,
+                    Self::transfer_funds(
+                        sender.clone(),
+                        Self::liquidity_provider(),
                         deposit_value,
                     )?;
 
@@ -102,11 +99,15 @@ decl_module! {
 
                 fn withdraw_in_full(_origin) -> Result {
                     let sender = ensure_signed(_origin)?;
-                    let liquidity_src = Self::liquidity_provider();
+                    
+                    // check to make sure user has an account
+                    ensure!(<UserBalance<T>>::exists(&sender), 
+                            "User does not have an existing account.");
 
                     // retrieve user_data struct from storage
                     let mut user_data = Self::user_balance(&sender);
-                    ensure!(user_data.supplying == true, "User has no supplied currency");
+                    ensure!(user_data.supplying == true, 
+                            "User has no supplied currency.");
 
                     // store balance for transfer later
                     let outgoing_balance = user_data.balance;
@@ -118,13 +119,13 @@ decl_module! {
                     <UserBalance<T>>::insert(&sender, user_data);
 
                     // transfer money from liquidity provider to sender
-                    <balances::Module<T> as Currency<_>>::transfer(
-                        &liquidity_src,
-                        &sender,
+                    Self::transfer_funds(
+                        Self::liquidity_provider(),
+                        sender.clone(),
                         outgoing_balance,
                     )?;
 
-                    // "helper" function decrement array, promoting code cleanliness
+                    // decrement array, promoting code cleanliness
                     Self::decrement_array(sender.clone())?;
 
                     // deposit 'SupplyWithdrawn' event
@@ -136,9 +137,23 @@ decl_module! {
                 fn borrow(_origin, borrow_value: T::Balance) -> Result {
                     let sender = ensure_signed(_origin)?;
 
+                    // user cannot borrow more, this is a one shot loan
+                    ensure!(!<UserBalance<T>>::exists(&sender), 
+                            "User has an existing loan.");
+
                     // high interest rate for borrowers, hard-coded
                     let borrow_interest_rate = Perbill::from_percent(25);
                     let current_block = <system::Module<T>>::block_number();
+
+                    let incr_total_borrow = Self::total_borrow()
+                        .checked_add(<T::Balance as As<u64>>::as_(borrow_value))
+                        .ok_or("Overflow encourtered incrementing total borrow")?;
+
+                    // Update TotalSupply to new value
+                    <TotalBorrow<T>>::put(incr_total_borrow);
+
+                    // TODO: need to add interest rate to params
+                    // TODO: currrently just sits at 1% i believe, FIx
 
                     let user_data = Terms {
                         supplying: false,
@@ -168,8 +183,13 @@ decl_module! {
                 fn repay_in_full(_origin) -> Result {
                     let sender = ensure_signed(_origin)?;
 
+                    // check to make sure user has an account
+                    ensure!(<UserBalance<T>>::exists(&sender), 
+                            "User does not have an existing account.");
+
                     // retrieve user_data struct from storage
                     let mut user_data = Self::user_balance(&sender);
+
                     // check to ensure user has borrowed funds
                     ensure!(user_data.supplying == false, "user has not borrowed funds");
 
@@ -198,6 +218,15 @@ decl_module! {
                 }
 
                 fn on_finalize() {
+                    // existing only for the proof-of-concept
+                    // in future, this will be replaced with
+                    // an "Interest Rate Index" that gets updated
+                    // upon any extrinsic to the runtime
+                    // Index[a,n] = Index[a,n-1] * (1 + r * t)
+                    
+                    // this is computationally heavy, and 
+                    // not good practice for blockchains
+
                     // retrieve user count to iterate over
                     let user_count = Self::user_count();
 
@@ -213,23 +242,33 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+    fn calculate_util_ratio(total_supply: u64, total_borrow: u64) -> Result {
+        let mkt_liquidity = total_supply - total_borrow;
+        let denominator = mkt_liquidity + total_borrow;
+        let util_ratio: f64 = (total_borrow / denominator) as f64;
+        // the below fails
+        // <UtilRatio<T>>::put(Perbill::from_fraction(util_ratio));
+        // the below compiles
+        <UtilRatio<T>>::put(Perbill::from_percent(15));
+        
+        Ok(())
+    }
+
     fn compound_interest(account_to_compound: T::AccountId) -> Result {
-
         let mut user_data = Self::user_balance(&account_to_compound);
-        let user_bal = user_data.balance;
-        let user_int = user_data.interest_rate;
-        let conv_bal = <T::Balance as As<u64>>::as_(user_bal);
+        let user_balance = user_data.balance;
+        let user_interest = user_data.interest_rate;
+        // let conv_balance  = <T::Balance as As<u64>>::as_(user_balance);
 
-        let accrual = Perbill::from_percent(1) * conv_bal;
-        let upd_bal = conv_bal + &accrual;
-        let rev_bal = <T::Balance as As<u64>>::sa(upd_bal);
+        // this needs to be changed to intake interest rate!
+        let accrued = user_interest * <T::Balance as As<u64>>::as_(user_balance);
+        let new_balance = <T::Balance as As<u64>>::as_(user_balance) + &accrued;
 
-        user_data.balance = rev_bal;
-        user_data.interest_rate = user_int;
+        // update terms struct to reflect updated balance
+        user_data.balance = <T::Balance as As<u64>>::sa(new_balance);
 
         // update storage to reflect compounded interest
         <UserBalance<T>>::insert(&account_to_compound, user_data);
-        <AccruedInterest<T>>::put(&rev_bal);
 
         Ok(())
     }
@@ -239,6 +278,9 @@ impl<T: Trait> Module<T> {
         incoming: T::AccountId,
         transfer_value: T::Balance
     ) -> Result {
+        // while it generally takes up the same amount of space,
+        // by moving to own function more logic can be added
+        // to the transfer later, if needed 
         <balances::Module<T> as Currency<_>>::transfer(
             &outgoing,
             &incoming,
@@ -263,7 +305,7 @@ impl<T: Trait> Module<T> {
     }
 
     fn decrement_array(user_to_remove: T::AccountId) -> Result {
-        
+        // retrieve current user count for runtime-purposed array
         let user_count = Self::user_count();
         let new_user_count = user_count.checked_sub(1)
             .ok_or("Underflow subtracting a new user from total users")?;
@@ -274,7 +316,7 @@ impl<T: Trait> Module<T> {
         if user_index != user_count {
             // set last_user as the last user in the list
             let last_user = <UserArray<T>>::get(user_count);
-            // 
+            // swap and pop method
             <UserArray<T>>::insert(&user_count, &last_user);
             <UserIndex<T>>::insert(&last_user, user_index);
         }
@@ -290,11 +332,9 @@ impl<T: Trait> Module<T> {
 decl_event!(
 	pub enum Event<T> 
         where 
-            // AccountId = <T as system::Trait>::AccountId 
             <T as system::Trait>::AccountId,
             <T as balances::Trait>::Balance,
         {
-                LiquidityProvidedChanged(AccountId, AccountId),
                 CurrencySupplied(AccountId, Balance),
                 CurrencyBorrowed(AccountId, Balance),
                 SupplyWithdrawn(AccountId, Balance),
