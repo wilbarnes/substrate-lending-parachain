@@ -141,6 +141,35 @@ Performing computations on an array that can expand indefinitely is not good pra
 
 This is better replaced by an interest rate index that updates only upon a deposit or borrow extrinsic to the runtime that updates the total supply, utilization rate, and subsequently influences a change in the interest rate. 
 
+### Bringing ReservableCurrency into Scope
+
+To emulate the securing of collateral, ReservableCurrency was brought into scope to reserve the initial amount a user has borrowed.
+
+`use support::Reservable Currency`
+
+Within the module logic, when a user borrows currency, the amount borrowed is reserved, as below:
+
+```
+fn borrow(_origin, borrow_value: T::Balance) -> Result {
+   let sender = ensure_signed(_origin)?;
+
+   // user cannot borrow more, this is a one shot loan
+   ensure!(!<UserBalance<T>>::exists(&sender), 
+      "User has an existing loan.");
+
+   // high interest rate for borrowers, hard-coded
+   let borrow_interest_rate = Perbill::from_percent(3);
+
+   let incr_total_borrow = Self::total_borrow()
+      .checked_add(<T::Balance as As<u64>>::as_(borrow_value))
+      .ok_or("Overflow encourtered incrementing total borrow")?;
+
+   <balances::Module<T>>::reserve(
+      &sender,
+      borrow_value,
+   )?;
+```
+
 
 # Building
 
