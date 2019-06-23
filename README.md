@@ -8,6 +8,16 @@ The runtime logic is simple, and for the sake of brevity, much of it has been ge
 
 In its current state, the runtime is light, only inheriting the balances module and the currency trait. Functionality is limited in the sense that one T::AccountId maps to one loan/deposit. 
 
+# Quickstart 
+
+`$ git clone git@github.com:wilbarnes/substrate-lending-parachain.git`
+
+`$ cd substrate-lending-parachaine/`
+
+`$ ./scripts/build.sh`
+
+`$ ./target/release/lending --dev`
+
 **TODO**: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
 
 A user cannot:
