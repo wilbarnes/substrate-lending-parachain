@@ -7,6 +7,7 @@ use support::{
     dispatch::Result, 
     ensure,
     traits::Currency, 
+    traits::ReservableCurrency,
 };
 use system::{ ensure_signed };
 use parity_codec::{ Encode, Decode };
@@ -16,13 +17,17 @@ use runtime_primitives::{ Perbill };
 #[derive(Encode, Decode, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Terms<Balance, BlockNumber> {
-    supplying: bool,
+    deposit: bool,
     balance: Balance,
     interest_rate: Perbill,
     start_block: BlockNumber,
+    reserved: Balance,
 }
 
 pub trait Trait: system::Trait + balances::Trait {
+        // The borrowed balance. 
+        // type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -65,16 +70,18 @@ decl_module! {
 
                     // set user supply terms
                     let user_terms = Terms {
-                        supplying: true,
+                        deposit: true,
                         balance: deposit_value,
                         interest_rate: interest_rate,
                         start_block: <system::Module<T>>::block_number(),
+                        reserved: <balances::Module<T>>::reserved_balance(&sender),
                     };
 
                     let incr_total_supply = Self::total_supply()
                         .checked_add(<T::Balance as As<u64>>::as_(deposit_value))
                         .ok_or("Overflow encourtered incrementing total supply")?;
 
+                    // T::Currency::reserve(&sender, deposit_value);
                     // update TotalSupply to new value
                     <TotalSupply<T>>::put(incr_total_supply);
 
@@ -106,7 +113,7 @@ decl_module! {
 
                     // retrieve user_data struct from storage
                     let mut user_data = Self::user_balance(&sender);
-                    ensure!(user_data.supplying == true, 
+                    ensure!(user_data.deposit == true, 
                             "User has no supplied currency.");
 
                     // store balance for transfer later
@@ -142,12 +149,17 @@ decl_module! {
                             "User has an existing loan.");
 
                     // high interest rate for borrowers, hard-coded
-                    let borrow_interest_rate = Perbill::from_percent(25);
-                    let current_block = <system::Module<T>>::block_number();
+                    let borrow_interest_rate = Perbill::from_percent(3);
+                    // let current_block = <system::Module<T>>::block_number();
 
                     let incr_total_borrow = Self::total_borrow()
                         .checked_add(<T::Balance as As<u64>>::as_(borrow_value))
                         .ok_or("Overflow encourtered incrementing total borrow")?;
+
+                    <balances::Module<T>>::reserve(
+                        &sender,
+                        borrow_value,
+                    )?;
 
                     // Update TotalSupply to new value
                     <TotalBorrow<T>>::put(incr_total_borrow);
@@ -156,10 +168,11 @@ decl_module! {
                     // TODO: currrently just sits at 1% i believe, FIx
 
                     let user_data = Terms {
-                        supplying: false,
+                        deposit: false,
                         balance: borrow_value,
                         interest_rate: borrow_interest_rate,
-                        start_block: current_block,
+                        start_block: <system::Module<T>>::block_number(),
+                        reserved: <balances::Module<T>>::reserved_balance(&sender),
                     };
 
                     // add struct to storage
@@ -191,13 +204,24 @@ decl_module! {
                     let mut user_data = Self::user_balance(&sender);
 
                     // check to ensure user has borrowed funds
-                    ensure!(user_data.supplying == false, "user has not borrowed funds");
+                    ensure!(user_data.deposit == false, "user has not borrowed funds");
 
                     // store balance for transfer later
                     let outgoing_balance = user_data.balance;
 
                     // set user balance to zero
                     user_data.balance = <T::Balance as As<u64>>::sa(0);
+
+                    // unreserve sender's currency
+                    <balances::Module<T>>::unreserve(
+                        &sender, 
+                        <balances::Module<T>>::reserved_balance(&sender),
+                    );
+
+                    user_data.reserved = <balances::Module<T>>::reserved_balance(&sender);
+
+                    // update struct in storage to reflect paid in full
+                    <UserBalance<T>>::insert(&sender, user_data);
 
                     Self::decrement_array(sender.clone())?;
 
@@ -207,9 +231,6 @@ decl_module! {
                         Self::liquidity_provider(),
                         outgoing_balance,
                     )?;
-
-                    // update struct in storage to reflect paid in full
-                    <UserBalance<T>>::insert(&sender, user_data);
 
                     Self::deposit_event(RawEvent::BorrowRepaid(sender, outgoing_balance));
 
