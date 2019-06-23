@@ -112,9 +112,35 @@ This is a reminder to myself to investigate this further. I discovered that `run
 
 The current process to compound interest occurs in step-by-step fashion, straying away from 'complex' arithmetic. 
 
-My goal is to implement an Interest Rate Index which allows the accrued interest of an account to be calculated off-chain. Currently, the 
+My medium-term goal is to implement an Interest Rate Index which allows the accrued interest of an account to be calculated off-chain. Currently, the interest is compounded on a per-block basis using the 'on_finalize()' special function, seen below:
 
-- 
+```
+fn on_finalize() {
+   // existing only for the proof-of-concept
+   // in future, this will be replaced with
+   // an "Interest Rate Index" that gets updated
+   // upon any extrinsic to the runtime
+   // Index[a,n] = Index[a,n-1] * (1 + r * t)
+                    
+   // this is computationally heavy, and 
+   // not good practice for blockchains
+
+   // retrieve user count to iterate over
+   let user_count = Self::user_count();
+
+   // iterate over open accounts
+   for each in 0..user_count {
+      // retrieve address
+      let addr = Self::user_array(each);
+      // compound interest of each account
+      Self::compound_interest(addr);
+   }
+}
+```
+Performing computations on an array that can expand indefinitely is not good practice. Understanding that, lets work under the assumption that this parachain serves under a light load with Alice operating as the market maker for only a handful of people. The chain will operate just fine under these conditions. 
+
+This is better replaced by an interest rate index that updates only upon a deposit or borrow extrinsic to the runtime that updates the total supply, utilization rate, and subsequently influences a change in the interest rate. 
+
 
 # Building
 
