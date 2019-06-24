@@ -86,7 +86,7 @@ Same process as before.
 
 ### Things to be Consider
 
-- When borrowing currency, it will appear as though your user has not borrowed anything at all (balance appears to be unchanged minus gas fees. However, as a step towards securing collateral, the initial borrow balance of the user is reserved using the ReservableCurrency trait. When the user moves to repay the loan, that initial balance is unreserved and the payment in full, including accrued interest, is paid to the liquidity provider. 
+- When borrowing currency, it will appear as though your user has not borrowed anything at all (balance appears to be unchanged minus gas fees). However, as a step towards implementing logic that secures collateral, the initial borrow balance of the user is reserved using the ReservableCurrency trait. When the user moves to repay the loan, that initial balance is unreserved and the payment in full, including accrued interest, is transferred from the borrower to the liquidity provider. 
 
 ## Todo
 
