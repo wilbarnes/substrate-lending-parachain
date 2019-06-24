@@ -127,17 +127,6 @@ The liquidity provider used is Alice, and this variable is set using the Genesis
 
 The runtime constructed here is a Proof-of-Concept, intended solely for instructional purposes at this time, though these are use-cases I will implement over time. 
 
-
-### Create the lending runtime module
-```
-substrate-module-new lending wil
-```
-
-### We make some initial changes in 'chain_spec.rs'
-Our chain specification is found here: 'src/chain_spec.rs' 
-
-To our dev chain, we add three additional accounts (Bob, Charlie, and Dave) that we will outfit with 1_000_000 units of currency. 
-
 # Architecture Decisions 
 
 ## Chain Spec
