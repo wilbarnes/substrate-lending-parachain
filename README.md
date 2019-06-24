@@ -8,7 +8,7 @@ The runtime logic is simple, and for the sake of brevity, much of it has been ge
 
 In its current state, the runtime is light, only inheriting the balances module and the currency trait. Functionality is limited in the sense that one T::AccountId maps to one loan/deposit. 
 
-# Quickstart 
+## Quickstart 
 
 `$ git clone git@github.com:wilbarnes/substrate-lending-parachain.git`
 
@@ -22,7 +22,7 @@ With the dev chain now running, navigate to: `https://polkadot.js.org/apps/`
 
 Inside the 'Settings' tab, select 'Local Node (127.0.0.1:9944)' as the endpoint, then Save & Reload. 
 
-## Depositing & Borrowing
+### Depositing & Borrowing
 
 - Navigate to the 'Extrinsics' tab. 
 
@@ -30,11 +30,61 @@ Inside the 'Settings' tab, select 'Local Node (127.0.0.1:9944)' as the endpoint,
 
 - Set deposit_value to a value of your choice (note that our demo accounts are only outfit with 1,000,000 units of currency each), though it is suggested you use kilo as the unit of value. 
 
+- Submit Transaction. (See below, bottom right)
+
 ![](img/extrinsic_deposit.png)
 
-- Submit Transaction. (See bottom right of above)
-
 The account that submitted the extrinsic will now be accruing interest on a per-block basis. 
+
+### Viewing Compounding Balance
+
+Before we can query the chain state, we need to create our own custome type definition the global chain state query of our user's account. This generally only needs to be once. 
+
+- Navigate to the 'Settings' tab, and then select the 'Developer' within. 
+
+- Let's manually enter our custom type definition: 
+
+```
+{
+  "Terms": {
+    "deposit": "bool",
+    "balance": "Balance",
+    "interest_rate": "Perbill",
+    "start_block": "BlockNumber",
+    "reserved": "Balance"
+  }
+}
+```
+
+- Save.
+
+Now, we can query our state and receive helpful JSON in return. Let's begin:
+
+- Navigate to the 'Chain State' tab. 
+
+- Select the 'lending' runtime module. 
+
+- Select 'userBalance(AccountId)' state query with respective AccoundId used to deposit / borrow currency. 
+
+- Submit query using the blue '+' button. (See below, left-hand side)
+
+![](img/chainstate_userbalance.png)
+
+### Withdrawing / Repaying in Full
+
+Same process as before. 
+
+- Navigate to the 'Extrinsics' tab. 
+
+- Select the 'lending' runtime module. 
+
+- Depending on your previous action, select either the 'withdrawInFull()' or 'repayInFull()' method. 
+
+- Submit transaction. (See below)
+
+![](img/extrinsic_withdrawinfull.png)
+
+## Todo
 
 **TODO**: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
 
