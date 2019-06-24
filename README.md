@@ -88,10 +88,6 @@ Same process as before.
 
 - When borrowing currency, it will appear as though your user has not borrowed anything at all (balance appears to be unchanged minus gas fees). However, as a step towards implementing logic that secures collateral, the initial borrow balance of the user is reserved using the ReservableCurrency trait. When the user moves to repay the loan, that initial balance is unreserved and the payment in full, including accrued interest, is transferred from the borrower to the liquidity provider. 
 
-## Todo
-
-**TODO**: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
-
 A user cannot:
 - supply currency and then in another transaction supply more
 - supply currency and then borrow currency, and vice versa
@@ -261,6 +257,10 @@ Free Balance: The portion of a balance that is not reserved. The free balance is
 ```
 The balance you see after borrowing is that user's free balance. The reserved balance still resides within that users account. In the future, reserving or locking currency will be used to secure collateral for users looking to borrow. How this will be implemented has yet to be decided. More research needs to be done. 
 
+# Todo
+
+**TODO**: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
+**TODO**: Implement logic requiring users to secure collateral as a condition for borrowing. Seemingly, this can be done with the Lockable & Reservable Currency traits. 
 
 # Building
 
