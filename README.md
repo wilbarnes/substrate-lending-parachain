@@ -252,6 +252,15 @@ fn borrow(_origin, borrow_value: T::Balance) -> Result {
    )?;
 ```
 
+As mentioned in the Quickstart, when borrowing currency, the user's initial balance is reserved and not included as part of that user's 'free balance.' 
+
+As per the terminology in the reference docs:
+
+```
+Free Balance: The portion of a balance that is not reserved. The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, most functionality of the account is removed. When both it and the reserved balance are deleted, then the account is said to be dead.
+```
+The balance you see after borrowing is that user's free balance. The reserved balance still resides within that users account. In the future, reserving or locking currency will be used to secure collateral for users looking to borrow. How this will be implemented has yet to be decided. More research needs to be done. 
+
 
 # Building
 
