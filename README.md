@@ -30,7 +30,9 @@ Inside the 'Settings' tab, select 'Local Node (127.0.0.1:9944)' as the endpoint,
 
 - Set deposit_value to a value of your choice (note that our demo accounts are only outfit with 1,000,000 units of currency each), though it is suggested you use kilo as the unit of value. 
 
-- Submit Transaction. 
+![](img/extrinsic_deposit.png)
+
+- Submit Transaction. (See bottom right of above)
 
 The account that submitted the extrinsic will now be accruing interest on a per-block basis. 
 
