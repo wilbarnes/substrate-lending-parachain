@@ -88,9 +88,9 @@ Same process as before.
 
 - When borrowing currency, it will appear as though your user has not borrowed anything at all (balance appears to be unchanged minus gas fees). However, as a step towards implementing logic that secures collateral, the initial borrow balance of the user is reserved using the ReservableCurrency trait. When the user moves to repay the loan, that initial balance is unreserved and the payment in full, including accrued interest, is transferred from the borrower to the liquidity provider. 
 
-## Overview 
+# Overview 
 
-Dispatchable Functions:
+### Dispatchable Functions:
 ```
 // supplying currency to the runtime
 fn deposit(_origin, deposit_value: T::Balance) -> Result {};
@@ -100,10 +100,12 @@ fn withdraw_in_full(_origin) -> Result {};
 fn borrow(_origin, borrow_value: T::Balance) -> Result {};
 fn repay_in_full(_origin) -> Result ();
 
-fn on_finalize() {};
+// used simply for POC, 
+// also to demonstrate 'on_finalize()' & 'on_initialize()' special functions
+fn on_finalize() {}; 
 ```
 
-A user cannot:
+### A user cannot:
 - supply currency and then in another transaction supply more
 - supply currency and then borrow currency, and vice versa
 
@@ -122,13 +124,6 @@ The liquidity provider used is Alice, and this variable is set using the Genesis
 ### Borrowing and Repaying Interest
 - Using the 'borrow()' method, any user can borrow currency and start having the interest they'll eventually pay back start compounding. It's an expensive loan, 25%, so don't borrow and forget!
 - Using the 'repay_in_full()' method, any user who's borrowed currency can repay it back in addition to any interest they owe. 
-
-NOTE: Currently, this is an unsecured loan. Let's make the assumption that Alice knows or has vetted the folks she's allowing to borrow from her. 
-
-DEV TODO: Implement logic for secured lending (akin to MakerDAO & Compound).
-
-
-
 
 The runtime constructed here is a Proof-of-Concept, intended solely for instructional purposes at this time, though these are use-cases I will implement over time. 
 
@@ -221,11 +216,13 @@ Performing computations on an array that can expand indefinitely is not good pra
 
 This is better replaced by an interest rate index that updates only upon a deposit or borrow extrinsic to the runtime that updates the total supply, utilization rate, and subsequently influences a change in the interest rate. 
 
+On final note, I moved forward using 'on_finalize()' as it (and also 'on_initialize()') introduce some interesting mechanisms worth exploring. 
+
 ### Bringing ReservableCurrency into Scope
 
 To emulate the securing of collateral, ReservableCurrency was brought into scope to reserve the initial amount a user has borrowed.
 
-`use support::Reservable Currency`
+`use support::traits::ReservableCurrency`
 
 Within the module logic, when a user borrows currency, the amount borrowed is reserved, as below:
 
@@ -262,7 +259,10 @@ The balance you see after borrowing is that user's free balance. The reserved ba
 # Todo
 
 **TODO**: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
+
 **TODO**: Implement logic requiring users to secure collateral as a condition for borrowing. Seemingly, this can be done with the Lockable & Reservable Currency traits. 
+
+**TODO**: Implement Interest Rate Index (as described in Compounding Interest section), removing 'on_finalize()' as the special function keeping all the accounts up to date with compounded interest. 
 
 # Tests
 
