@@ -38,11 +38,11 @@ The account that submitted the extrinsic will now be accruing interest on a per-
 
 ### Viewing Compounding Balance
 
-Before we can query the chain state, we need to create our own custome type definition the global chain state query of our user's account. This generally only needs to be once. 
+Before we can query the chain state, we need to create our own custom type definition for the struct used to show deposit/borrow terms. This generally only needs to be performed once. 
 
-- Navigate to the 'Settings' tab, and then select the 'Developer' within. 
+- Navigate to the 'Settings' tab, and then select the 'Developer' tab within. 
 
-- Let's manually enter our custom type definition: 
+- Manually enter our custom type definition: 
 
 ```
 {
@@ -58,7 +58,7 @@ Before we can query the chain state, we need to create our own custome type defi
 
 - Save.
 
-Now, we can query our state and receive helpful JSON in return. Let's begin:
+Now, we can query our state and receive a helpful JSON response in return. Let's begin:
 
 - Navigate to the 'Chain State' tab. 
 
@@ -83,6 +83,10 @@ Same process as before.
 - Submit transaction. (See below)
 
 ![](img/extrinsic_withdrawinfull.png)
+
+### Things to be Consider
+
+- When borrowing currency, it will appear as though your user has not borrowed anything at all (balance appears to be unchanged minus gas fees. However, as a step towards securing collateral, the initial borrow balance of the user is reserved using the ReservableCurrency trait. When the user moves to repay the loan, that initial balance is unreserved and the payment in full, including accrued interest, is paid to the liquidity provider. 
 
 ## Todo
 
