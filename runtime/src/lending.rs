@@ -25,9 +25,6 @@ pub struct Terms<Balance, BlockNumber> {
 }
 
 pub trait Trait: system::Trait + balances::Trait {
-        // The borrowed balance. 
-        // type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
-
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -37,10 +34,12 @@ decl_storage! {
                 LiquidityProvider get(liquidity_provider) config(): T::AccountId;
 
                 // Total Supply & Borrow
+                // **not yet implemented**
                 TotalSupply get(total_supply): u64;
                 TotalBorrow get(total_borrow): u64;
 
                 // Utilization Ratio = Borrows[a] / (Cash[a] + Borrows[a])
+                // **not yet implemented**
                 UtilRatio get(util_ratio): Perbill;
 
                 // mapping of AccountId to Terms struct
@@ -81,7 +80,6 @@ decl_module! {
                         .checked_add(<T::Balance as As<u64>>::as_(deposit_value))
                         .ok_or("Overflow encourtered incrementing total supply")?;
 
-                    // T::Currency::reserve(&sender, deposit_value);
                     // update TotalSupply to new value
                     <TotalSupply<T>>::put(incr_total_supply);
 
@@ -163,9 +161,7 @@ decl_module! {
                     // Update TotalSupply to new value
                     <TotalBorrow<T>>::put(incr_total_borrow);
 
-                    // TODO: need to add interest rate to params
-                    // TODO: currrently just sits at 1% i believe, FIx
-
+                    // create Terms struct for user
                     let user_data = Terms {
                         deposit: false,
                         balance: borrow_value,
@@ -262,10 +258,12 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+    // **below function not yet implemented / used**
     fn calculate_util_ratio(total_supply: u64, total_borrow: u64) -> Result {
         let mkt_liquidity = total_supply - total_borrow;
         let denominator = mkt_liquidity + total_borrow;
         let util_ratio: f64 = (total_borrow / denominator) as f64;
+        // could not get the below to work
         // the below fails
         // <UtilRatio<T>>::put(Perbill::from_fraction(util_ratio));
         // the below compiles
@@ -278,9 +276,8 @@ impl<T: Trait> Module<T> {
         let mut user_data = Self::user_balance(&account_to_compound);
         let user_balance = user_data.balance;
         let user_interest = user_data.interest_rate;
-        // let conv_balance  = <T::Balance as As<u64>>::as_(user_balance);
 
-        // this needs to be changed to intake interest rate!
+        // retrieve & update accrued interest
         let accrued = user_interest * <T::Balance as As<u64>>::as_(user_balance);
         let new_balance = <T::Balance as As<u64>>::as_(user_balance) + &accrued;
 
@@ -453,7 +450,7 @@ mod tests {
 	}
 
         #[test]
-        fn kicking_the_tires() {
+        fn if_this_fails_something_is_wrong() {
             with_externalities(&mut build(), || {
                 assert!(true);
             })
@@ -479,7 +476,7 @@ mod tests {
         fn user_cant_withraw_without_deposit() {
             with_externalities(&mut build(), || {
                 assert_noop!(Lending::withdraw_in_full(Origin::signed(2)), 
-                             "User has no supplied currency");
+                             "User does not have an existing account.");
             });
         }
 
@@ -533,4 +530,22 @@ mod tests {
             });
         }
 
+        #[test]
+        fn user_cant_deposit_and_borrow() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::deposit(Origin::signed(2), 100));
+                assert_noop!(Lending::borrow(Origin::signed(2), 100), 
+                             "User has an existing loan.");
+
+            })
+        }
+
+        #[test]
+        fn user_cant_borrow_and_deposit() {
+            with_externalities(&mut build(), || {
+                assert_ok!(Lending::borrow(Origin::signed(2), 100));
+                assert_noop!(Lending::deposit(Origin::signed(2), 100), 
+                             "User has an existing deposit.");
+            })
+        }
 }
