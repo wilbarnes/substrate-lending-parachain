@@ -8,6 +8,16 @@ The runtime logic is simple, and for the sake of brevity, much of it has been ge
 
 In its current state, the runtime is light, only inheriting the balances module and the currency trait. Functionality is limited in the sense that one T::AccountId maps to one loan/deposit. 
 
+# Quickstart 
+
+`$ git clone git@github.com:wilbarnes/substrate-lending-parachain.git`
+
+`$ cd substrate-lending-parachain/`
+
+`$ ./scripts/build.sh`
+
+`$ ./target/release/lending --dev`
+
 **TODO**: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
 
 A user cannot:
@@ -112,9 +122,64 @@ This is a reminder to myself to investigate this further. I discovered that `run
 
 The current process to compound interest occurs in step-by-step fashion, straying away from 'complex' arithmetic. 
 
-My goal is to implement an Interest Rate Index which allows the accrued interest of an account to be calculated off-chain. Currently, the 
+My medium-term goal is to implement an Interest Rate Index which allows the accrued interest of an account to be calculated off-chain. Currently, the interest is compounded on a per-block basis using the 'on_finalize()' special function, seen below:
 
-- 
+```
+fn on_finalize() {
+   // existing only for the proof-of-concept
+   // in future, this will be replaced with
+   // an "Interest Rate Index" that gets updated
+   // upon any extrinsic to the runtime
+   // Index[a,n] = Index[a,n-1] * (1 + r * t)
+                    
+   // this is computationally heavy, and 
+   // not good practice for blockchains
+
+   // retrieve user count to iterate over
+   let user_count = Self::user_count();
+
+   // iterate over open accounts
+   for each in 0..user_count {
+      // retrieve address
+      let addr = Self::user_array(each);
+      // compound interest of each account
+      Self::compound_interest(addr);
+   }
+}
+```
+Performing computations on an array that can expand indefinitely is not good practice. Understanding that, lets work under the assumption that this parachain serves under a light load with Alice operating as the market maker for only a handful of people. The chain will operate just fine under these conditions. 
+
+This is better replaced by an interest rate index that updates only upon a deposit or borrow extrinsic to the runtime that updates the total supply, utilization rate, and subsequently influences a change in the interest rate. 
+
+### Bringing ReservableCurrency into Scope
+
+To emulate the securing of collateral, ReservableCurrency was brought into scope to reserve the initial amount a user has borrowed.
+
+`use support::Reservable Currency`
+
+Within the module logic, when a user borrows currency, the amount borrowed is reserved, as below:
+
+```
+fn borrow(_origin, borrow_value: T::Balance) -> Result {
+   let sender = ensure_signed(_origin)?;
+
+   // user cannot borrow more, this is a one shot loan
+   ensure!(!<UserBalance<T>>::exists(&sender), 
+      "User has an existing loan.");
+
+   // high interest rate for borrowers, hard-coded
+   let borrow_interest_rate = Perbill::from_percent(3);
+
+   let incr_total_borrow = Self::total_borrow()
+      .checked_add(<T::Balance as As<u64>>::as_(borrow_value))
+      .ok_or("Overflow encourtered incrementing total borrow")?;
+
+   <balances::Module<T>>::reserve(
+      &sender,
+      borrow_value,
+   )?;
+```
+
 
 # Building
 
