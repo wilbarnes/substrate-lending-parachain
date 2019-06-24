@@ -150,7 +150,6 @@ decl_module! {
 
                     // high interest rate for borrowers, hard-coded
                     let borrow_interest_rate = Perbill::from_percent(3);
-                    // let current_block = <system::Module<T>>::block_number();
 
                     let incr_total_borrow = Self::total_borrow()
                         .checked_add(<T::Balance as As<u64>>::as_(borrow_value))
