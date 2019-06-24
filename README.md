@@ -18,6 +18,22 @@ In its current state, the runtime is light, only inheriting the balances module 
 
 `$ ./target/release/lending --dev`
 
+With the dev chain now running, navigate to: `https://polkadot.js.org/apps/`
+
+Inside the 'Settings' tab, select 'Local Node (127.0.0.1:9944)' as the endpoint, then Save & Reload. 
+
+## Depositing & Borrowing
+
+- Navigate to the 'Extrinsics' tab. 
+
+- Find 'submit the following extrinsic' and adjust the runtime module to 'lending' and the method to 'deposit(deposit_value)' or 'borrow(borrow_value).'
+
+- Set deposit_value to a value of your choice (note that our demo accounts are only outfit with 1,000,000 units of currency each), though it is suggested you use kilo as the unit of value. 
+
+- Submit Transaction. 
+
+The account that submitted the extrinsic will now be accruing interest on a per-block basis. 
+
 **TODO**: Implement treasury runtime, allowing a pot to be set that multiple liquidity providers can interact with (allow folks to pool currency).
 
 A user cannot:
