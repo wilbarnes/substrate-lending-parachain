@@ -12,7 +12,7 @@ In its current state, the runtime is light, only inheriting the balances module 
 
 `$ git clone git@github.com:wilbarnes/substrate-lending-parachain.git`
 
-`$ cd substrate-lending-parachaine/`
+`$ cd substrate-lending-parachain/`
 
 `$ ./scripts/build.sh`
 
