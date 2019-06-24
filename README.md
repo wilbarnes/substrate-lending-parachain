@@ -88,15 +88,9 @@ Same process as before.
 
 - When borrowing currency, it will appear as though your user has not borrowed anything at all (balance appears to be unchanged minus gas fees). However, as a step towards implementing logic that secures collateral, the initial borrow balance of the user is reserved using the ReservableCurrency trait. When the user moves to repay the loan, that initial balance is unreserved and the payment in full, including accrued interest, is transferred from the borrower to the liquidity provider. 
 
-A user cannot:
-- supply currency and then in another transaction supply more
-- supply currency and then borrow currency, and vice versa
+## Overview 
 
-In each of these scenarios, the extrinsic will fail. The deposit and borrow functions both contain 'ensure!()' macros that prevent users from performing any action if they have an existing action in the runtime. 
-
-The liquidity provider used is Alice, and this variable is set using the GenesisConfig with the variable being retrieved from the 'src/chain_spec.rs' file. 
-
-Methods:
+Dispatchable Functions:
 ```
 // supplying currency to the runtime
 fn deposit(_origin, deposit_value: T::Balance) -> Result {};
@@ -108,9 +102,17 @@ fn repay_in_full(_origin) -> Result ();
 
 fn on_finalize() {};
 ```
-## Overview 
-- Users supplying currency to Alice compound interest at 1% per block. That's quite a nice rate to compound on a per block basis. 
-- Users borrowing currency from Alice compound interest at 25% per block. Quite an expensive loan. 
+
+A user cannot:
+- supply currency and then in another transaction supply more
+- supply currency and then borrow currency, and vice versa
+
+In each of these scenarios, the extrinsic will fail. The deposit and borrow functions both contain ensure macros that prevent users from performing any action if they have an existing action in the runtime. 
+
+The liquidity provider used is Alice, and this variable is set using the GenesisConfig with the variable being retrieved from the 'src/chain_spec.rs' file. 
+
+- Users supplying currency to Alice compound interest at 1% per block. 
+- Users borrowing currency from Alice compound interest at 3% per block. 
 - If Alice garners some borrowers she'll be earning good cash. However, her intention is to act as a market maker and she's saved an initial 1,000,000 units of currency to bootstrap her market making operation, so she's looking for folks to supply some additional cash. This is how she'll scale and earn more currency. 
 
 ### Supplying and Earning Interest 
